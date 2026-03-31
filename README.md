@@ -1,196 +1,199 @@
-# SQL Parser
+# PostgreSQL 测试指南
 
-通用 SQL 解析器，支持 SELECT/INSERT/UPDATE/DELETE 语句解析和字段血缘分析。
+## 文件说明
 
-## 功能特性
+本目录包含 PostgreSQL 的完整学习资料：
 
-- **多语句类型支持**: SELECT, INSERT, UPDATE, DELETE
-- **CTE (WITH 子句)**: 支持多层 CTE 定义
-- **集合操作**: UNION, UNION ALL
-- **JOIN 支持**: INNER JOIN, LEFT JOIN 等
-- **字段血缘分析**: 追踪字段从源表到输出的完整链路
-- **统一模型**: 所有语句类型使用一致的模型结构
+| 文件 | 说明 |
+|------|------|
+| `postgresql_guide.md` | 完整的 SQL 语法指南 |
+| `postgresql_test.sql` | 可执行的测试 SQL 文件 |
+| `README.md` | 本文件 |
 
-## 项目结构
+---
 
-```
-sql-parser/
-├── pom.xml
-├── src/
-│   ├── main/
-│   │   └── java/
-│   │       └── com/example/sqlparser/
-│   │           ├── model/           # 数据模型
-│   │           │   ├── SqlStatement.java      # 根对象
-│   │           │   ├── SelectDetails.java     # SELECT 详情
-│   │           │   ├── InsertDetails.java     # INSERT 详情
-│   │           │   ├── UpdateDetails.java     # UPDATE 详情
-│   │           │   ├── DeleteDetails.java     # DELETE 详情
-│   │           │   ├── QueryBlock.java        # 查询块
-│   │           │   ├── ColumnRef.java         # 字段引用
-│   │           │   ├── TableRef.java          # 表引用
-│   │           │   ├── LineageInfo.java       # 血缘信息
-│   │           │   └── ...
-│   │           └── parser/
-│   │               └── SqlParser.java         # 解析器实现
-│   └── test/
-│       └── java/
-│           └── com/example/sqlparser/
-│               └── parser/
-│                   ├── SqlParserTest.java         # 基础测试
-│                   └── SqlParserAdvancedTest.java # 高级测试
+## 快速开始
+
+### 1. 安装 PostgreSQL
+
+**Ubuntu/Debian:**
+```bash
+sudo apt update
+sudo apt install postgresql postgresql-contrib
 ```
 
-## 核心模型
-
-### SqlStatement（根对象）
-
-```java
-SqlStatement
-├── type: SELECT/INSERT/UPDATE/DELETE
-├── ctes: List<CteDefinition>           # WITH 子句
-├── subQueries: List<SubQueryRef>       # 子查询
-├── selectDetails: SelectDetails        # SELECT 时填充
-├── insertDetails: InsertDetails        # INSERT 时填充
-├── updateDetails: UpdateDetails        # UPDATE 时填充
-└── deleteDetails: DeleteDetails        # DELETE 时填充
+**macOS:**
+```bash
+brew install postgresql
+brew services start postgresql
 ```
 
-### 字段血缘
-
-```java
-ColumnRef
-├── name: 字段名
-├── alias: 别名
-└── lineage: LineageInfo
-    ├── expressionType: COLUMN/ADD/MULTIPLY/FUNCTION 等
-    ├── sources: List<LineageSource>    # 血缘来源
-    │   ├── type: TABLE_COLUMN/CTE_COLUMN/CONSTANT/EXPRESSION
-    │   ├── tableColumn: TableColumnRef
-    │   ├── constant: ConstantValue
-    │   └── nestedExpression: LineageInfo  # 递归
-    └── transforms: List<TransformFunction>  # 转换函数
+**Docker:**
+```bash
+docker run --name postgres -e POSTGRES_PASSWORD=password -p 5432:5432 -d postgres
 ```
 
-## 使用示例
-
-### 解析 SELECT
-
-```java
-SqlParser parser = new SqlParser();
-SqlStatement stmt = parser.parse("SELECT id, name FROM users WHERE age > 18");
-
-// 获取表
-List<TableRef> tables = stmt.getAllTables();
-// [TableRef(name="users")]
-
-// 获取字段血缘
-List<ColumnLineage> lineage = stmt.getAllColumnLineage();
-// [ColumnLineage(targetColumn="id"), ColumnLineage(targetColumn="name")]
-```
-
-### 解析 INSERT ... SELECT
-
-```java
-SqlStatement stmt = parser.parse(
-    "INSERT INTO target (id, name) SELECT user_id, user_name FROM source"
-);
-
-InsertDetails details = stmt.getInsertDetails();
-// target 表: details.getTargetTable()
-// 源查询: details.getSelectQuery()
-// 字段映射: details.getColumnMappings()
-```
-
-### 解析带表达式的 SELECT
-
-```java
-SqlStatement stmt = parser.parse(
-    "SELECT price * quantity AS total FROM orders"
-);
-
-ColumnRef totalCol = stmt.getSelectDetails()
-    .getQueryBlock()
-    .getSelect()
-    .getColumns()
-    .get(0);
-
-// 表达式类型: MULTIPLY
-ExpressionType type = totalCol.getLineage().getExpressionType();
-
-// 血缘来源: price, quantity
-List<LineageSource> sources = totalCol.getLineage().getSources();
-```
-
-### 解析 CTE
-
-```java
-SqlStatement stmt = parser.parse(
-    "WITH cte AS (SELECT id FROM users) SELECT * FROM cte"
-);
-
-List<CteDefinition> ctes = stmt.getCtes();
-// [CteDefinition(name="cte", query=QueryBlock)]
-```
-
-## 环境要求
-
-- Java 8 或更高版本
-- Maven 3.6+
-
-## 构建和测试
+### 2. 创建测试数据库
 
 ```bash
-# 编译
-mvn clean compile
+# 切换到 postgres 用户
+sudo -u postgres psql
 
-# 运行测试
-mvn test
-
-# 打包
-mvn clean package
+# 在 psql 中执行
+CREATE DATABASE test_db;
+CREATE USER test_user WITH PASSWORD 'password';
+GRANT ALL PRIVILEGES ON DATABASE test_db TO test_user;
+\q
 ```
 
-### 指定 Java 版本编译
-
-如果本地有多个 Java 版本，可以指定使用 Java 8：
+### 3. 运行测试文件
 
 ```bash
-export JAVA_HOME=/path/to/java8
-mvn clean package
+# 方法1: 使用 psql 命令行
+psql -U test_user -d test_db -f postgresql_test.sql
+
+# 方法2: 进入 psql 后执行
+psql -U test_user -d test_db
+\i postgresql_test.sql
 ```
 
-## 测试覆盖
+---
 
-- 基础 SELECT 解析
-- 带 WHERE/GROUP BY/ORDER BY/LIMIT 的 SELECT
-- JOIN 解析
-- UNION/UNION ALL
-- INSERT VALUES/SELECT
-- UPDATE 单表/多表
-- DELETE
-- CTE (WITH 子句)
-- 字段血缘分析
-- 复杂表达式解析
+## 测试内容概览
 
-## 注意事项
+### 基础测试
+- ✅ 数据类型定义
+- ✅ 表创建 (含约束、默认值)
+- ✅ 索引创建 (B-tree、GIN、部分索引等)
+- ✅ 插入、更新、删除操作
 
-当前实现为简化版解析器，基于正则表达式和关键字匹配。生产环境建议使用 ANTLR4 生成完整的 SQL 语法解析器。
+### 高级特性测试
+- ✅ 分区表
+- ✅ JSONB 操作
+- ✅ 数组类型
+- ✅ 全文搜索
+- ✅ 窗口函数
+- ✅ CTE (公用表表达式)
+- ✅ 递归查询
 
-支持的 SQL 方言：
-- MySQL（主要测试）
-- 部分 PostgreSQL 语法
+### 实用功能测试
+- ✅ 视图和物化视图
+- ✅ 存储过程和函数
+- ✅ 触发器
+- ✅ 事务控制
+- ✅ UPSERT (INSERT ON CONFLICT)
 
-### Java 版本兼容性
+---
 
-- 源码兼容 Java 8+
-- 使用 Maven 编译时自动适配 Java 8 字节码
-- 不使用 Java 9+ 的新特性（如 `var`、`List.of()`、`Stream.toList()` 等）
+## 常用命令速查
 
-## 扩展计划
+### 连接数据库
+```bash
+psql -U username -d database_name -h hostname -p port
+```
 
-- [ ] 集成 ANTLR4 完整语法
-- [ ] 支持更多 SQL 方言（Oracle、SQL Server）
-- [ ] 子查询血缘追踪优化
-- [ ] 数据血缘可视化输出
-- [ ] 血缘影响分析（反向追踪）
+### psql 常用命令
+```sql
+\l              -- 列出所有数据库
+\c database     -- 切换数据库
+\dt             -- 列出所有表
+\d table_name   -- 查看表结构
+\di             -- 列出所有索引
+\dv             -- 列出所有视图
+\df             -- 列出所有函数
+\du             -- 列出所有用户
+\timing on      -- 开启执行时间显示
+\x              -- 切换扩展显示模式
+\q              -- 退出 psql
+```
+
+### 数据库管理
+```sql
+-- 创建数据库
+CREATE DATABASE dbname;
+
+-- 删除数据库
+DROP DATABASE dbname;
+
+-- 备份数据库
+pg_dump -U username -d database_name > backup.sql
+
+-- 恢复数据库
+psql -U username -d database_name < backup.sql
+
+-- 导出特定表
+pg_dump -U username -d database_name -t table_name > table_backup.sql
+```
+
+---
+
+## 性能优化建议
+
+### 1. 索引优化
+```sql
+-- 查看查询执行计划
+EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM users WHERE email = 'test@example.com';
+
+-- 创建合适的索引
+CREATE INDEX CONCURRENTLY idx_users_email ON users(email);
+
+-- 删除未使用的索引
+SELECT * FROM pg_stat_user_indexes WHERE idx_scan = 0;
+```
+
+### 2. 查询优化
+```sql
+-- 使用 LIMIT 分页
+SELECT * FROM posts ORDER BY created_at DESC LIMIT 10 OFFSET 20;
+
+-- 使用游标 (大数据集)
+DECLARE cursor_posts CURSOR FOR SELECT * FROM posts;
+FETCH 10 FROM cursor_posts;
+```
+
+### 3. 维护操作
+```sql
+-- 分析表
+ANALYZE users;
+
+-- 清理表
+VACUUM ANALYZE posts;
+
+-- 重建索引
+REINDEX INDEX idx_users_email;
+```
+
+---
+
+## 学习路径建议
+
+### 初学者
+1. 阅读 `postgresql_guide.md` 的基础部分
+2. 运行测试文件中的基础查询
+3. 练习 CRUD 操作
+
+### 进阶学习
+1. 深入学习索引类型和使用场景
+2. 掌握 JOIN 和子查询
+3. 学习窗口函数和 CTE
+
+### 高级主题
+1. 分区表设计和优化
+2. JSONB 高级操作
+3. 全文搜索配置
+4. 性能调优和监控
+
+---
+
+## 参考资料
+
+- [PostgreSQL 官方文档](https://www.postgresql.org/docs/)
+- [PostgreSQL 中文社区](http://www.postgres.cn/)
+- [pgAdmin](https://www.pgadmin.org/) - 图形化管理工具
+- [DBeaver](https://dbeaver.io/) - 通用数据库工具
+
+---
+
+## 问题反馈
+
+如有问题或建议，欢迎提出！
