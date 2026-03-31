@@ -18,6 +18,8 @@
 
 访问 https://issues.sonatype.org/ 注册账号。
 
+**注意**: 发布到 Maven Central 需要与 groupId 对应的域名所有权或 GitHub 账号验证。
+
 #### 1.2 创建项目工单
 
 创建新工单申请仓库权限：
