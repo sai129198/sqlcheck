@@ -1,5 +1,6 @@
 package com.example.sqlparser.model;
 
+import com.example.sqlparser.model.impala.ImpalaMetadataStmt;
 import lombok.Data;
 
 import java.util.ArrayList;
@@ -24,6 +25,9 @@ public class SqlStatement {
     private UpdateDetails updateDetails;
     private DeleteDetails deleteDetails;
     private MergeDetails mergeDetails;
+    
+    // Impala 特有元数据语句
+    private ImpalaMetadataStmt metadataStmt;
 
     public boolean isSelect() {
         return type == StatementType.SELECT;

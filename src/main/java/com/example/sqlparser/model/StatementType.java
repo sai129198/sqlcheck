@@ -9,5 +9,9 @@ public enum StatementType {
     UPDATE,
     DELETE,
     MERGE,
-    REPLACE
+    REPLACE,
+    CREATE,
+    ALTER,
+    DROP,
+    OTHER
 }

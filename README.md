@@ -55,6 +55,7 @@ List<TableRef> tables = stmt.getSelectDetails().getQueryBlock().getFromClause().
 | Presto/Trino | `PrestoSqlParser` | ✅ 支持 |
 | ClickHouse | `ClickHouseSqlParser` | ✅ 支持 |
 | StarRocks | `StarRocksSqlParser` | ✅ 支持 |
+| **Impala** | `ImpalaSqlParser` | ✅ 支持 |
 
 ## 快速开始
 
@@ -124,6 +125,54 @@ PostgreSQLInsertDetails details = (PostgreSQLInsertDetails) stmt.getInsertDetail
 System.out.println(details.isOnConflict()); // true
 ```
 
+#### 解析 Impala CREATE TABLE
+```java
+ImpalaSqlParser impalaParser = new ImpalaSqlParser();
+
+// 基础 CREATE TABLE
+ImpalaCreateTable table = impalaParser.parseCreateTable(
+    "CREATE TABLE users (id BIGINT, name STRING) STORED AS PARQUET"
+);
+System.out.println(table.getTableName()); // users
+System.out.println(table.getStoredAs()); // PARQUET
+
+// Kudu 表
+ImpalaCreateTable kuduTable = impalaParser.parseCreateTable(
+    "CREATE TABLE events (id BIGINT PRIMARY KEY, data STRING) " +
+    "DISTRIBUTE BY HASH (id) INTO 16 BUCKETS STORED AS KUDU"
+);
+System.out.println(kuduTable.isKuduTable()); // true
+System.out.println(kuduTable.getPrimaryKey()); // [id]
+
+// 缓存表
+ImpalaCreateTable cachedTable = impalaParser.parseCreateTable(
+    "CREATE TABLE hot_data (id INT) CACHED IN 'pool1' WITH REPLICATION = 2"
+);
+System.out.println(cachedTable.isCached()); // true
+System.out.println(cachedTable.getCacheReplication()); // 2
+```
+
+#### 解析 Impala COMPUTE STATS
+```java
+ImpalaSqlParser parser = new ImpalaSqlParser();
+SqlStatement stmt = parser.parse("COMPUTE STATS mydb.users");
+ImpalaMetadataStmt metadata = stmt.getMetadataStmt();
+System.out.println(metadata.getStmtType()); // COMPUTE_STATS
+System.out.println(metadata.getDatabase()); // mydb
+System.out.println(metadata.getTableName()); // users
+```
+
+#### 解析 Impala SELECT with hints
+```java
+ImpalaSqlParser parser = new ImpalaSqlParser();
+SqlStatement stmt = parser.parse(
+    "SELECT STRAIGHT_JOIN * FROM users u JOIN orders o ON u.id = o.user_id [SHUFFLE]"
+);
+ImpalaSelectDetails details = (ImpalaSelectDetails) stmt.getSelectDetails();
+System.out.println(details.isStraightJoin()); // true
+System.out.println(details.isShuffle()); // true
+```
+
 ## 项目结构
 
 ```
@@ -138,11 +187,13 @@ sql-parser/
 │   │   │   ├── presto/         # Presto 模型
 │   │   │   ├── clickhouse/     # ClickHouse 模型
 │   │   │   ├── starrocks/      # StarRocks 模型
+│   │   │   ├── impala/         # Impala 模型
 │   │   │   └── ...             # 通用模型
 │   │   └── parser/             # SQL 解析器
 │   │       ├── SqlParser.java
 │   │       ├── PostgreSQLSqlParser.java
 │   │       ├── MySQLSqlParser.java
+│   │       ├── ImpalaSqlParser.java
 │   │       └── ...
 │   └── test/java/com/example/sqlparser/
 │       └── parser/             # 测试类
@@ -185,6 +236,20 @@ sql-parser/
 - ✅ INSERT IGNORE / ON DUPLICATE KEY UPDATE
 - ✅ LIMIT offset,count
 - ✅ SQL_CALC_FOUND_ROWS
+
+#### Impala 特有功能
+- ✅ CREATE TABLE (EXTERNAL/IF NOT EXISTS)
+- ✅ STORED AS (PARQUET/AVRO/TEXTFILE/RCFILE/SEQUENCEFILE/ORC/KUDU)
+- ✅ PARTITIONED BY / DISTRIBUTE BY / SORT BY
+- ✅ Kudu 表支持 (PRIMARY KEY)
+- ✅ CACHED / UNCACHED
+- ✅ COMPUTE STATS / DROP STATS
+- ✅ REFRESH / INVALIDATE METADATA
+- ✅ SELECT [STRAIGHT_JOIN] [SHUFFLE | NOSHUFFLE]
+- ✅ INSERT [SHUFFLE | NOSHUFFLE]
+- ✅ SHOW TABLES/DATABASES/PARTITIONS/COLUMN STATS
+- ✅ DESCRIBE FORMATTED/EXTENDED
+- ✅ EXPLAIN LEVEL (MINIMAL/STANDARD/EXTENDED/VERBOSE)
 
 ### 2. 元数据提取
 - 提取 SQL 中引用的所有表和列
